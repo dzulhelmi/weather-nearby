@@ -1,0 +1,17 @@
+{
+  "name": "cuaca-sekitar",
+  "version": "1.0.0",
+  "description": "Cari kawasan, dapat ramalan cuaca dan tempat berdekatan — demo API connection dan webhook",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

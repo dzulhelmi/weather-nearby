@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Weather &amp; Nearby</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #fff; --border: #e3e6ea; --text: #16181d;
+    --muted: #6b7280; --accent: #2f6feb;
+    --ok: #15803d; --ok-bg: #e9f6ee;
+    --err: #b91c1c; --err-bg: #fdeaea;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115; --panel: #171a21; --border: #262b35; --text: #e7e9ee;
+      --muted: #98a0ae; --accent: #6c9bff;
+      --ok: #6ee7a8; --ok-bg: #12241a;
+      --err: #ff8b8b; --err-bg: #2a1616;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header { padding: 20px 24px; background: var(--panel); border-bottom: 1px solid var(--border); }
+  header h1 { margin: 0 0 3px; font-size: 18px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  main { max-width: 900px; margin: 0 auto; padding: 22px 24px 60px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px; margin-bottom: 18px;
+  }
+  h2 {
+    margin: 0 0 3px; font-size: 12px; text-transform: uppercase;
+    letter-spacing: .07em; color: var(--muted);
+  }
+  .hint { margin: 0 0 14px; color: var(--muted); font-size: 12.5px; }
+
+  form { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+  .field { flex: 1; min-width: 180px; }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+  input[type=text], input[type=number] {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border);
+    border-radius: 8px; background: var(--bg); color: var(--text);
+    font: inherit; font-size: 14px;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .field.small { flex: 0 0 120px; min-width: 120px; }
+  button {
+    padding: 10px 16px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--text); font: inherit; font-size: 14px;
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .55; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .status { margin-top: 10px; font-size: 12.5px; font-family: var(--mono); min-height: 17px; color: var(--muted); }
+  .status.err { color: var(--err); }
+
+  .place-name { font-size: 21px; font-weight: 600; letter-spacing: -0.01em; }
+  .place-meta { color: var(--muted); font-size: 12.5px; font-family: var(--mono); margin-top: 2px; }
+  .now { display: flex; align-items: center; gap: 16px; margin: 18px 0 4px; }
+  .now .icon { font-size: 46px; line-height: 1; }
+  .now .temp { font-size: 34px; font-weight: 600; letter-spacing: -0.02em; }
+  .now .desc { color: var(--muted); font-size: 13.5px; }
+
+  .days { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 18px; }
+  @media (max-width: 560px) { .days { grid-template-columns: repeat(2, 1fr); } }
+  .day { border: 1px solid var(--border); border-radius: 10px; padding: 11px; text-align: center; }
+  .day .dow { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .day .ic { font-size: 24px; margin: 5px 0; }
+  .day .t { font-size: 13.5px; font-weight: 600; }
+  .day .r { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+
+  ul.places { list-style: none; margin: 0; padding: 0; }
+  ul.places li {
+    display: flex; justify-content: space-between; gap: 12px; align-items: baseline;
+    padding: 9px 2px; border-bottom: 1px solid var(--border); font-size: 14px;
+  }
+  ul.places li:last-child { border-bottom: 0; }
+  ul.places a { color: var(--text); text-decoration: none; }
+  ul.places a:hover { color: var(--accent); text-decoration: underline; }
+  .dist { flex: none; color: var(--muted); font-size: 12px; font-family: var(--mono); }
+
+  .alert-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  ul.alerts { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow-y: auto; }
+  ul.alerts li {
+    display: flex; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--border);
+    align-items: baseline; font-size: 13.5px;
+  }
+  ul.alerts li:last-child { border-bottom: 0; }
+  .tag {
+    flex: none; padding: 2px 8px; border-radius: 20px;
+    font-size: 10.5px; font-weight: 700; letter-spacing: .04em; font-family: var(--mono);
+  }
+  .ok .tag { background: var(--ok-bg); color: var(--ok); }
+  .no .tag { background: var(--err-bg); color: var(--err); }
+  .alert-body { flex: 1; min-width: 0; }
+  .alert-sub { color: var(--muted); font-size: 12px; font-family: var(--mono); word-break: break-word; }
+  .time { flex: none; color: var(--muted); font-size: 11px; font-family: var(--mono); }
+  .empty { color: var(--muted); font-size: 13px; padding: 8px 2px; }
+  .hidden { display: none; }
+
+  footer {
+    max-width: 900px; margin: 0 auto; padding: 0 24px 40px;
+    color: var(--muted); font-size: 12.5px;
+  }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Weather &amp; Nearby</h1>
+  <p>Enter an area name to get its weather forecast and notable places within a chosen radius.</p>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>Search an area</h2>
+    <p class="hint">Forecast and points of interest for any town or district.</p>
+    <form id="search-form">
+      <div class="field">
+        <label for="place">Area name</label>
+        <input type="text" id="place" value="Shah Alam" required>
+      </div>
+      <div class="field small">
+        <label for="radius">Radius (km)</label>
+        <input type="number" id="radius" value="5" min="1" max="10">
+      </div>
+      <button class="primary" type="submit">Search</button>
+    </form>
+    <div class="status" id="status"></div>
+  </section>
+
+  <section class="panel hidden" id="weather-panel">
+    <div class="place-name" id="place-name"></div>
+    <div class="place-meta" id="place-meta"></div>
+    <div class="now">
+      <div class="icon" id="now-icon"></div>
+      <div>
+        <div class="temp" id="now-temp"></div>
+        <div class="desc" id="now-desc"></div>
+      </div>
+    </div>
+    <div class="days" id="days"></div>
+  </section>
+
+  <section class="panel hidden" id="nearby-panel">
+    <h2>Within radius</h2>
+    <p class="hint" id="nearby-hint"></p>
+    <ul class="places" id="nearby"></ul>
+  </section>
+
+  <section class="panel">
+    <h2>Weather alerts</h2>
+    <p class="hint">
+      Severe weather alerts pushed to this app by your monitoring service appear here.
+      Use the test buttons to check your integration is wired up correctly.
+    </p>
+    <div class="alert-actions">
+      <button id="btn-good">Send test alert</button>
+      <button id="btn-bad">Send test alert with an invalid token</button>
+    </div>
+    <ul class="alerts" id="alerts"></ul>
+    <div class="empty" id="alerts-empty">No alerts received yet.</div>
+  </section>
+</main>
+
+<footer>
+  Weather data from
+  <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>.
+  Places from
+  <a href="https://www.mediawiki.org/wiki/API:Geosearch" target="_blank" rel="noopener">Wikipedia</a>.
+</footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/* ---------------- Area search ---------------- */
+
+$('search-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = e.target.querySelector('button');
+  const name = $('place').value.trim();
+  const radius = $('radius').value;
+
+  btn.disabled = true;
+  $('status').className = 'status';
+  $('status').textContent = 'Searching…';
+
+  try {
+    const res = await fetch(`/api/place?name=${encodeURIComponent(name)}&radius=${radius}`);
+    const data = await res.json();
+
+    if (!res.ok) {
+      $('status').className = 'status err';
+      $('status').textContent = data.message;
+      $('weather-panel').classList.add('hidden');
+      $('nearby-panel').classList.add('hidden');
+      return;
+    }
+
+    render(data);
+    $('status').textContent = '';
+  } catch (err) {
+    $('status').className = 'status err';
+    $('status').textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+function render(data) {
+  const { place, weather, nearby, nearbyError, radiusKm } = data;
+
+  $('place-name').textContent = place.name;
+  $('place-meta').textContent =
+    `${place.region} · ${place.latitude.toFixed(4)}, ${place.longitude.toFixed(4)}`;
+  $('now-icon').textContent = weather.now.icon;
+  $('now-temp').textContent = `${weather.now.temperature}°C`;
+  $('now-desc').textContent =
+    `${weather.now.text} · humidity ${weather.now.humidity}% · wind ${weather.now.wind} km/h`;
+
+  $('days').innerHTML = weather.days.map((d, i) => `
+    <div class="day">
+      <div class="dow">${i === 0 ? 'Today' : DOW[new Date(d.date).getDay()]}</div>
+      <div class="ic">${d.icon}</div>
+      <div class="t">${Math.round(d.max)}° / ${Math.round(d.min)}°</div>
+      <div class="r">💧 ${d.rainChance}%</div>
+    </div>`).join('');
+
+  $('weather-panel').classList.remove('hidden');
+
+  $('nearby-hint').textContent = nearbyError
+    ? `Wikipedia could not be reached (${nearbyError}) — weather is still shown.`
+    : `${nearby.length} places within ${radiusKm} km, nearest first.`;
+
+  $('nearby').innerHTML = nearby.length
+    ? nearby.map((p) => `
+        <li>
+          <a href="${p.url}" target="_blank" rel="noopener">${esc(p.title)}</a>
+          <span class="dist">${p.distanceKm} km</span>
+        </li>`).join('')
+    : '<li class="empty">No places found in this radius. Try a larger one.</li>';
+
+  $('nearby-panel').classList.remove('hidden');
+}
+
+/* ---------------- Webhook alerts ---------------- */
+
+const alertLog = [];
+
+/**
+ * Two steps, on purpose:
+ *   1. Ask the server to build and sign an alert payload (playing the role of
+ *      the external monitoring service).
+ *   2. POST that payload to /webhook/alert from here.
+ *
+ * Step 2 is a real HTTP request to the webhook endpoint, visible in the
+ * Network tab — which makes the demo much easier to believe.
+ */
+async function sendAlert(useWrongToken) {
+  const buttons = [$('btn-good'), $('btn-bad')];
+  buttons.forEach((b) => { b.disabled = true; });
+
+  try {
+    const alert = await (await fetch('/api/demo/alert', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ area: $('place').value.trim(), useWrongToken }),
+    })).json();
+
+    const res = await fetch('/webhook/alert', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-webhook-token': alert.token },
+      body: alert.body,
+    });
+    const result = await res.json();
+
+    alertLog.unshift({
+      accepted: result.accepted === true,
+      status: res.status,
+      message: result.accepted ? result.message : result.reason,
+      area: result.accepted ? result.area : '—',
+      level: result.accepted ? result.level : 'rejected',
+      at: new Date(),
+    });
+    if (alertLog.length > 20) alertLog.pop();
+    renderAlerts();
+  } finally {
+    buttons.forEach((b) => { b.disabled = false; });
+  }
+}
+
+$('btn-good').addEventListener('click', () => sendAlert(false));
+$('btn-bad').addEventListener('click', () => sendAlert(true));
+
+function renderAlerts() {
+  $('alerts-empty').style.display = alertLog.length ? 'none' : 'block';
+  $('alerts').innerHTML = alertLog.map((a) => `
+    <li class="${a.accepted ? 'ok' : 'no'}">
+      <span class="tag">${a.accepted ? 'VALID' : 'REJECTED'}</span>
+      <span class="alert-body">
+        ${esc(a.message)}
+        <div class="alert-sub">${esc(a.area)} · ${esc(a.level)}</div>
+      </span>
+      <span class="time">${a.at.toLocaleTimeString()}</span>
+    </li>`).join('');
+}
+</script>
+</body>
+</html>
